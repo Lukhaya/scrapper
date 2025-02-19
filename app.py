@@ -21,12 +21,18 @@ if not os.path.exists('pdf_downloads'):
 @app.route('/files', methods=['GET'])
 def list_files():
     # Get the HTML content of the page
-    response = requests.get(url)
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+
+    response = requests.get(url, headers=headers)
+    print(f"Status code: {response.status_code}")
+    print(response.text[:500])  # Print the first 500 characters of the page
     soup = BeautifulSoup(response.text, 'html.parser')
 
     # Find the exact button with the specified class and onclick attributes containing PDF links
     buttons = soup.find_all('button', {'title': 'Download'}, onclick=True)
-
+    print(f"Found {len(buttons)} buttons")
     pdf_urls = []
 
     # Extract URLs from the onclick attributes
