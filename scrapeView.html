@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Read PDF File</title>
+    <style>
+        /* General Styling */
+body {
+    font-family: Arial, sans-serif;
+    background: #f8f9fa;
+    padding: 20px;
+    text-align: center;
+}
+
+/* Container */
+.container {
+    max-width: 400px;
+    margin: 0 auto;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Title */
+h2 {
+    font-size: 20px;
+    color: #333;
+    margin-bottom: 15px;
+}
+
+/* Form Elements */
+input, select, button {
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+/* File Input */
+#pdfInput {
+    background: #f1f1f1;
+    cursor: pointer;
+}
+
+/* Select Dropdown */
+#places {
+    background: white;
+}
+
+/* Time Input */
+#time {
+    background: white;
+}
+
+/* Search Button */
+#search {
+    background: #007bff;
+    color: white;
+    font-size: 18px;
+    border: none;
+    cursor: pointer;
+    transition: 0.3s ease-in-out;
+}
+
+#search:hover {
+    background: #0056b3;
+}
+
+/* Time Details */
+#timeDetails {
+    padding: 15px;
+    border-radius: 5px;
+    background: #f1f1f1;
+    margin-top: 15px;
+}
+
+/* Time List */
+.time-title {
+    font-size: 18px;
+    color: #333;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.time-list {
+    list-style: none;
+    padding: 0;
+}
+
+.time-item {
+    padding: 5px;
+    border-bottom: 1px solid #ddd;
+    font-size: 16px;
+    color: #555;
+}
+
+.stop-details {
+    margin-top: 10px;
+    font-size: 16px;
+    color: #444;
+}
+
+.no-data {
+    font-size: 16px;
+    color: #888;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+    .container {
+        width: 90%;
+    }
+}
+
+    </style>
+</head>
+<body>
+    <h1>Select a PDF to Download</h1>
+    <select id="fileSelect">
+        <option value="">Loading files...</option>
+    </select>
+    <select id="places" >
+
+    </select>
+    <input type="time" id="time">
+    <button id="search">🔎</button>
+    <div id="timeDetails"></div>
+    <pre id="pdfText"></pre>
+
+    <!-- Include PDF.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        const timeDetails =  document.getElementById('timeDetails');
+        let placesMap = [];
+
+        document.getElementById("search").addEventListener("click", function () {
+            const searchText = document.getElementById("places").value.trim();
+            const timeText = document.getElementById("time").value;
+            const hour = timeText.split(":")[0];
+            console.log(searchText, timeText);
+          let existingPlace = placesMap.find(place => place.name.toLowerCase().includes(searchText.toLowerCase()));
+          console.log(existingPlace);
+          updateTimeDetails(existingPlace, hour);
+
+        });
+
+        function updateTimeDetails(existingPlace, hour) {
+    const timeDetails = document.getElementById("timeDetails");
+
+    // Clear previous content
+    timeDetails.innerHTML = "";
+
+    if (!existingPlace) {
+        timeDetails.innerHTML = "<p class='no-data'>No data available.</p>";
+        return;
+    }
+
+    // Filter times based on the given hour
+    let timesInRange = existingPlace.times.filter(timex => timex.split(':')[0].includes(hour));
+
+    // Create a title
+    const title = document.createElement("h3");
+    title.textContent = "Bus Times";
+    title.classList.add("time-title");
+
+    // Create a list for times
+    const list = document.createElement("ul");
+    list.classList.add("time-list");
+
+    timesInRange.forEach(time => {
+        const listItem = document.createElement("li");
+        listItem.textContent = time.trim();
+        listItem.classList.add("time-item");
+        list.appendChild(listItem);
+    });
+
+    // Create a details paragraph
+    const details = document.createElement("p");
+    details.innerHTML = `<strong>Previous Stop:</strong> ${existingPlace.prev || "N/A"} <br> 
+                         <strong>Next Stop:</strong> ${existingPlace.next || "N/A"}`;
+    details.classList.add("stop-details");
+
+    // Append everything
+    timeDetails.appendChild(title);
+    timeDetails.appendChild(list);
+    timeDetails.appendChild(details);
+}
+
+
+        function populateSelect(options) {
+    const selectElement = document.getElementById('places');
+    
+    // Clear existing options
+    selectElement.innerHTML = '';
+
+    // Add a default option
+    const defaultOption = document.createElement("option");
+    defaultOption.text = "Select an option";
+    defaultOption.value = "";
+    selectElement.appendChild(defaultOption);
+
+    // Loop through the options and add them
+    options.forEach(optionValue => {
+        const option = document.createElement("option");
+        option.text = optionValue;
+        option.value = optionValue;
+        selectElement.appendChild(option);
+    });
+}
+        
+        
+        class PlaceMap {
+    constructor(name, times = []) {
+        this.name = name;
+        this.times = times;
+        this.next = null;
+        this.prev = null;
+    }
+}
+// Function to add a PlaceMap while ensuring uniqueness by name
+function addPlace(placex) {
+    // Find if the place already exists in placesMap
+    let existingPlace = placesMap.find(place => place.name === placex.name);
+
+    if (existingPlace) {
+        // If exists, concatenate times (avoiding duplicates)
+        existingPlace.times = [...new Set([...existingPlace.times, ...placex.times])];
+    } else {
+        // Otherwise, add a new PlaceMap
+        placesMap.push(placex);
+    }
+}
+
+        async function extractTextFromPDF(pdfData) {
+            timeDetails.textContent = 'Loading text...';
+            const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+            let text = '';
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                text += textContent.items.map(item => item.str).join(' ') + '\n';
+            }
+            let placesFound = [];
+            
+            var rows = text.split("\n");
+            timeDetails.textContent = 'Processing text...';
+            for (let i = 0; i < rows.length;i++){
+                let textInRow = rows[i];
+                let inbetweens = textInRow.split('|');
+
+                for (let j = 0; j < inbetweens.length;j++){
+                    if (isPlace(inbetweens[j])) {
+                        //next 22 items are the times for the places
+                        let times = []
+                        for(let k= 1; k < 23; k++){
+                            times.push(inbetweens[j+k]);
+                        }
+                        let place = new PlaceMap(inbetweens[j],times);
+                        place.next = inbetweens[j+24];
+                        place.prev = inbetweens[j-24];
+                        addPlace(place);
+                        if (!placesFound.includes(inbetweens[j]))placesFound.push(inbetweens[j]);
+                    };
+                }
+            }
+            timeDetails.textContent = 'Processing complete!';
+            populateSelect(placesFound);
+            //timeDetails.textContent = JSON.stringify(placesMap);
+            //document.getElementById('pdfText').textContent = placesFound.join('\n');
+        }
+
+        function isPlace(str){
+            return (!(str.includes(':') || str.includes('via') || str.includes('-') || str.trim() == ''))
+                
+        }
+        function findStartAndEnd(str){
+            let start = str.indexOf('|');
+            let end = str.substring(start+1,str.length).indexOf("|");
+            if (start >= 0 && end >= 0){
+                return {start:start, end:end,flaggedEnd: false};
+            }
+            return {start:start, end:end,flaggedEnd: true}
+                
+        }
+
+
+        async function loadFiles() {
+            try {
+                const response = await fetch('http://localhost:5000/files');
+                const data = await response.json();
+
+                const fileSelect = document.getElementById('fileSelect');
+                fileSelect.innerHTML = ''; // Clear existing options
+
+                data.files.forEach(fileUrl => {
+                    const fileName = fileUrl.split('/').pop(); // Extract file name from URL
+                    const option = document.createElement('option');
+                    option.value = fileName;
+                    option.textContent = fileName;
+                    fileSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading files:', error);
+                alert('Failed to load files!');
+            }
+        }
+        loadFiles()
+
+        document.getElementById('fileSelect').addEventListener('change', function(event) {
+            const file = event.target.value;
+            if (!file) return;
+
+            const file_url = 'http://localhost:5000/download';
+            const filePath = `${file_url}/${file}`;
+
+            fetch(filePath)
+                .then(res => res.blob())  // Treat the response as a binary blob
+                .then(blob => {
+                    console.log(filePath);
+                    const reader = new FileReader();
+                    reader.onloadend = function() {
+                        const pdfData = new Uint8Array(reader.result);  // Convert the blob to a Uint8Array
+                        extractTextFromPDF(pdfData);  // Now pass the binary data to the PDF extraction function
+                    };
+                    reader.readAsArrayBuffer(blob);  // Read the blob as an ArrayBuffer
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        });
+
+
+    </script>
+</body>
+</html>
