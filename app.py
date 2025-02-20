@@ -141,6 +141,7 @@ def extract_text_from_pdf(pdf_path):
         for row in rows:
             inbetweens = row.split('|')
             for i, value in enumerate(inbetweens):
+                value = value.strip()
                 if is_place(value):
                     times = inbetweens[i + 1:i + 23]
                     place = {
