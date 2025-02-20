@@ -157,7 +157,24 @@ def extract_text_from_pdf(pdf_path):
 
 @app.route('/')
 def index():
-    return render_template('./scrapeView.html')
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>API Routes Summary</title>
+    </head>
+    <body>
+        <h1>API Routes Summary</h1>
+        <ul>
+            <li><strong>GET /</strong> - API Overview (this page)</li>
+            <li><strong>GET /files/list</strong> - List available PDF files</li>
+            <li><strong>GET /download/&lt;filename&gt;</strong> - Download a specific file</li>
+            <li><strong>POST /upload</strong> - Upload a new PDF file</li>
+            <li><strong>POST /extract</strong> - Extract text from an uploaded PDF</li>
+        </ul>
+    </body>
+    </html>
+    """
 
 @app.route('/extract/<filename>', methods=['GET'])
 def extract_from_pdf(filename):
