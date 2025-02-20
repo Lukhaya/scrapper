@@ -2,8 +2,9 @@ import os
 import re
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, render_template
 from flask_cors import CORS
+import PyPDF2
 
 app = Flask(__name__)
 
@@ -52,6 +53,20 @@ def list_files():
 def download_file(filename):
     return send_from_directory('pdf_downloads', filename, as_attachment=True)
 
+# Route to view all files in the pdf_downloads folder
+@app.route('/files/list', methods=['GET'])
+def list_all_files():
+    folder_path = 'pdf_downloads'
+    
+    # Check if the folder exists
+    if not os.path.exists(folder_path):
+        return jsonify({'error': 'Folder not found'}), 404
+    
+    # Get a list of files in the folder
+    files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+    
+    return jsonify({'files': files})
+
 @app.route('/download-all', methods=['GET'])
 def download_all():
     # Get the HTML content of the page
@@ -92,6 +107,67 @@ def download_all():
 
     return jsonify({'status': 'Download complete', 'files': pdf_urls})
 
+pdf_downloads = 'pdf_downloads'
+app.config['pdf_downloads'] = pdf_downloads
+
+places_map = []
+
+class PlaceMap:
+    def __init__(self, name, times=None, next_stop=None, prev_stop=None):
+        self.name = name
+        self.times = times if times else []
+        self.next = next_stop
+        self.prev = prev_stop
+
+def add_place(place):
+    existing_place = next((p for p in places_map if p['name'] == place['name']), None)
+    if existing_place:
+        existing_place['times'] = list(set(existing_place['times'] + place['times']))
+    else:
+        places_map.append(place)
+
+def is_place(text):
+    return not (':' in text or 'via' in text or '-' in text or text.strip() == '')
+
+def extract_text_from_pdf(pdf_path):
+    places_found = []
+    with open(pdf_path, 'rb') as file:
+        reader = PyPDF2.PdfReader(file)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + '\n'
+        rows = text.split('\n')
+
+        for row in rows:
+            inbetweens = row.split('|')
+            for i, value in enumerate(inbetweens):
+                if is_place(value):
+                    times = inbetweens[i + 1:i + 23]
+                    place = {
+                        'name': value.strip(),
+                        'times': times,
+                        'next': inbetweens[i + 24] if i + 24 < len(inbetweens) else None,
+                        'prev': inbetweens[i - 24] if i - 24 >= 0 else None
+                    }
+                    add_place(place)
+                    if value not in places_found:
+                        places_found.append(value.strip())
+    return places_found
+
+@app.route('/')
+def index():
+    return render_template('./scrapeView.html')
+
+@app.route('/extract/<filename>', methods=['GET'])
+def extract_from_pdf(filename):
+    pdf_path = os.path.join(app.config['pdf_downloads'], filename)
+    if not os.path.exists(pdf_path):
+        return jsonify({'error': 'File not found'}), 404
+    places = []
+    places = extract_text_from_pdf(pdf_path)
+    return jsonify({'places': places, 'placesMap': places_map})
+
 if __name__ == '__main__':
+    os.makedirs(pdf_downloads, exist_ok=True)
     app.run(host='0.0.0.0', port=10000)  # Render uses port 10000
 
