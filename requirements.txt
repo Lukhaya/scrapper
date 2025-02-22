@@ -4,4 +4,3 @@ beautifulsoup4
 requests
 gunicorn
 PyPDF2
-re
