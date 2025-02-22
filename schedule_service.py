@@ -56,6 +56,7 @@ class Route:
 class ScheduleService:
     def __init__(self):
         self.base_url = "https://scrapper-rsro.onrender.com"
+        self.routes_cache = {}
 
     # Function to clean up the route data from the file name
     def clean_route_data(self, file_name):
@@ -65,30 +66,37 @@ class ScheduleService:
             to_route = match.group(2).replace('_', ' ').title()
             effective_date = match.group(3)
             time_table_no = match.group(5)
-            print('clean data available')
             return Route(from_route, to_route, file_name, effective_date, time_table_no)
         return None
 
     # Function to fetch the list of files
     def get_files_list(self):
-        print('getting files')
+        if 'files' in self.routes_cache:
+            return self.routes_cache['files']
         url = f"{self.base_url}/files/list"
         response = requests.get(url)
         if response.status_code == 200:
-            return response.json().get("files", [])
+            self.routes_cache['files'] = response.json().get("files", [])
+            return self.routes_cache['files']
         return []
 
     # Function to extract route data from the PDF file
     def extract_route_data(self, pdf_name):
-        print('extracting route data')
+        if pdf_name in self.routes_cache:
+            return self.routes_cache[pdf_name]
         url = f"{self.base_url}/extract/{pdf_name}"
         response = requests.get(url)
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            self.routes_cache[pdf_name] = data
+            return data
         return {}
 
     # Function to get the routes, process file data and extract additional details
     def get_routes(self):
+        if 'routes' in self.routes_cache:
+            return self.routes_cache['routes']
+        
         files = self.get_files_list()
         routes = []
         
@@ -101,9 +109,10 @@ class ScheduleService:
                     route.add_places(extracted_data.get('places', []))
                     route.add_places_map(extracted_data.get('placesMap', []))
                 routes.append(route)
-        print(f'found {len(routes)} routes')
+        
+        self.routes_cache['routes'] = routes
         return routes
-    
+
     # Method to find times for user location and destination
     def find_times_for_location_and_destination(self, user_location, dest):
         routes = self.get_routes()
@@ -113,7 +122,6 @@ class ScheduleService:
         for route in routes:
             # Check if the current route has the user location and destination
             if route.hasPlace(user_location) and route.hasPlace(dest):
-                print(f'route: {route}')
                 # Get times for the user location
                 times_for_user = route.getPlaceTimes(user_location)
                 
@@ -134,11 +142,11 @@ class ScheduleService:
 
     def clean_places(self, places):
         invalid_patterns = [
-            r"^.*\b(STANDARD|SATURDAYS|SUNDAYS|OPERATED|REG|CONDITIONS|CARRIAGE|WEBSITE|LIABLE|ANY|LOSS|INCONVENIENCE|FAILURE|MAINTAIN|VEHICLES|TIMETABLE).*", # Regex for common invalid phrases
-            r"^[A-Za-z]+\.[A-Za-z]+$",  # Abbreviations like A.D.E.
-            r"^[A-Za-z]+\s*[A-Za-z]+$", # Single word place names (Optional if you want to keep these)
-            r"\(",  # If you want to remove places with parenthesis (like "MAMRE (PARADISE RD)")
-            r"^\s*$",  # Remove empty strings
+            r"^.*\b(STANDARD|SATURDAYS|SUNDAYS|OPERATED|REG|CONDITIONS|CARRIAGE|WEBSITE|LIABLE|ANY|LOSS|INCONVENIENCE|FAILURE|MAINTAIN|VEHICLES|TIMETABLE).*", 
+            r"^[A-Za-z]+\.[A-Za-z]+$",  
+            r"^[A-Za-z]+\s*[A-Za-z]+$", 
+            r"\(",  
+            r"^\s*$",  
         ]
 
         valid_places = []
@@ -157,24 +165,11 @@ class ScheduleService:
 
     # Method to get all available places
     def get_all_places(self):
-        all_places = set()  # Using a set to avoid duplicates
-        routes = self.get_routes()  # Assuming you already have the method to fetch routes
+        all_places = set()  
+        routes = self.get_routes()  
 
         for route in routes:
-            all_places.update(route.places)  # Add places from each route
+            all_places.update(route.places)  
 
         return sorted(all_places)
-    
 
-    
-
-# # Example usage:
-
-# userlocation = "DU NOON"
-# dest = "MAMRE (PARADISE RD)"
-
-# # Example usage:
-# schedule_service = ScheduleService()
-
-# # Call the method with user location and destination
-# schedule_service.find_times_for_location_and_destination(userlocation, dest)
