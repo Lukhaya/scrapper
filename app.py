@@ -2,9 +2,11 @@ import os
 import re
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, jsonify, send_from_directory, render_template
+from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 import PyPDF2
+
+from schedule_service import ScheduleService
 
 app = Flask(__name__)
 
@@ -185,6 +187,39 @@ def extract_from_pdf(filename):
     places = extract_text_from_pdf(pdf_path)
     return jsonify({'places': places, 'placesMap': places_map})
 
+
+
+
+@app.route('/schedules', methods=['GET'])
+def get_schedule():
+    schedule_service = ScheduleService()
+    # Get user location and destination from query parameters
+    user_location = request.args.get('user_location')
+    dest = request.args.get('destination')
+
+    if not user_location or not dest:
+        return jsonify({"error": "Missing user_location or destination"}), 400
+
+    # Call the method to get times for the given locations
+    times = schedule_service.find_times_for_location_and_destination(user_location, dest)
+    
+    # If times were found, return them in the response, otherwise, return a message
+    if times:
+        return jsonify({"times": times}), 200
+    else:
+        return jsonify({"message": f"No schedule found for {user_location} to {dest}."}), 404
+
+# Create an endpoint to get all places
+@app.route('/places', methods=['GET'])
+def get_all_places():
+    schedule_service = ScheduleService()
+    places = schedule_service.get_all_places()
+
+    if places:
+        return jsonify({"places": places})
+    else:
+        return jsonify({"message": "No places available."}), 404
+    
 if __name__ == '__main__':
     os.makedirs(pdf_downloads, exist_ok=True)
     app.run(host='0.0.0.0', port=10000)  # Render uses port 10000
