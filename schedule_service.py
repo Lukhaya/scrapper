@@ -14,7 +14,7 @@ class Route:
         self.places_map = {}
 
     def __str__(self):
-        return f"Route({self.from_route} -> {self.to_route}, Effective Date: {self.effective_date}, Time Table No: {self.time_table_no})"
+        return f"Route({self.from_route} <-> {self.to_route}, Effective Date: {self.effective_date}, Time Table No: {self.time_table_no})"
 
     def add_places(self, places):
         self.places = places
@@ -23,7 +23,7 @@ class Route:
         self.places_map = places_map
 
     def getRouteName(self):
-        return f"{self.from_route} -> {self.to_route}"
+        return f"{self.from_route} <-> {self.to_route}"
 
     def hasPlace(self, placeName):
         return placeName.upper() in self.places
