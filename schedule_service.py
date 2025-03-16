@@ -93,8 +93,6 @@ class ScheduleService:
         routes = []
         for file in files:
             route = self.clean_route_data(file)
-            
-            print(route)
             if route:
                 # Extract more details like stops or schedule data
                 extracted_data = self.extract_route_data(route.pdf)

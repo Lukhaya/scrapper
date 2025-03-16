@@ -3,6 +3,9 @@ import re
 import requests
 from bs4 import BeautifulSoup
 import PyPDF2
+import fitz  # PyMuPDF
+import threading
+
 
 class PDFService:
     def __init__(self, download_folder='pdf_downloads'):
@@ -44,35 +47,49 @@ class PDFService:
 class PlaceMapService:
     def __init__(self):
         self.places_map = []
+        self.lock = threading.Lock()
 
     def add_place(self, place):
-        existing_place = next((p for p in self.places_map if p['name'] == place['name']), None)
-        if existing_place:
-            existing_place['times'] = list(set(existing_place['times'] + place['times']))
-        else:
-            self.places_map.append(place)
+        with self.lock:
+            existing_place = next((p for p in self.places_map if p['name'] == place['name']), None)
+            if existing_place:
+                existing_place['times'] = list(set(existing_place['times'] + place['times']))
+            else:
+                self.places_map.append(place)
+
+    def process_text_chunk(self, text, places_found):
+        rows = text.split('\n')
+        for row in rows:
+            inbetweens = row.split('|')
+            for i, value in enumerate(inbetweens):
+                value = value.strip()
+                if self.is_place(value):
+                    place = {
+                        'name': value,
+                        'times': inbetweens[i + 1:i + 23],
+                        'next': inbetweens[i + 24] if i + 24 < len(inbetweens) else None,
+                        'prev': inbetweens[i - 24] if i - 24 >= 0 else None
+                    }
+                    self.add_place(place)
+                    with self.lock:
+                        if value not in places_found:
+                            places_found.append(value)
 
     def extract_text_from_pdf(self, pdf_path):
         places_found = []
         pdf_path = os.path.join('pdf_downloads', pdf_path)
-        with open(pdf_path, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-            for page in reader.pages:
-                text = page.extract_text() + '\n'
-                rows = text.split('\n')
-                for row in rows:
-                    inbetweens = row.split('|')
-                    for i, value in enumerate(inbetweens):
-                        if self.is_place(value.strip()):
-                            place = {
-                                'name': value.strip(),
-                                'times': inbetweens[i + 1:i + 23],
-                                'next': inbetweens[i + 24] if i + 24 < len(inbetweens) else None,
-                                'prev': inbetweens[i - 24] if i - 24 >= 0 else None
-                            }
-                            self.add_place(place)
-                            if value.strip() not in places_found:
-                                places_found.append(value.strip())
+        
+        with fitz.open(pdf_path) as doc:
+            threads = []
+            for page in doc:
+                text = page.get_text("text") + '\n'
+                thread = threading.Thread(target=self.process_text_chunk, args=(text, places_found))
+                thread.start()
+                threads.append(thread)
+            
+            for thread in threads:
+                thread.join()
+        
         return places_found
 
     def is_place(self, text):
