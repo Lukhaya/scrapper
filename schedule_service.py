@@ -2,6 +2,7 @@ import re
 import os
 from flask import jsonify
 from pdf_service import PDFService, PlaceMapService
+import concurrent.futures
 
 class Route:
     def __init__(self, from_route, to_route, pdf, effective_date, time_table_no):
@@ -87,19 +88,34 @@ class ScheduleService:
         places = self.place_service.extract_text_from_pdf(pdf_name)
         return {'places': places, 'placesMap': self.place_service.places_map}
 
-    # Function to get the routes, process file data and extract additional details
+    # Function to get the routes, process file data, and extract additional details using threading
     def get_routes(self):
         files = self.get_files_list()['files']
         routes = []
-        for file in files:
-            route = self.clean_route_data(file)
-            if route:
-                # Extract more details like stops or schedule data
-                extracted_data = self.extract_route_data(route.pdf)
-                if extracted_data:
-                    route.add_places(extracted_data['places'])
-                    route.add_places_map(extracted_data['placesMap'])
-                routes.append(route)
+        extracted_data_list = []
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_route = {}
+
+            for file in files:
+                route = self.clean_route_data(file)
+                if route:
+                    # Submit the extraction task to the thread pool
+                    future = executor.submit(self.extract_route_data, route.pdf)
+                    future_to_route[future] = route
+                    routes.append(route)
+
+            # Collect results as they complete
+            for future in concurrent.futures.as_completed(future_to_route):
+                route = future_to_route[future]
+                try:
+                    extracted_data = future.result()
+                    if extracted_data:
+                        route.add_places(extracted_data['places'])
+                        route.add_places_map(extracted_data['placesMap'])
+                except Exception as e:
+                    print(f"Error processing {route.pdf}: {e}")
+
         print(f'found {len(routes)} routes')
         return routes
     
